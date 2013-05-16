@@ -14,11 +14,21 @@
 
 int panic_on_oops = 1;
 
+static void *
+find_symbol_address(const char *symbol)
+{
+#ifdef CONFIG_KALLSYMS
+	return (void*)kallsyms_lookup_name(symbol);
+#else
+	return NULL;
+#endif
+}
+
 void kmsg_dump(enum kmsg_dump_reason reason)
 {
 	void (*real_kmsg_dump)(char reason);
 
-	real_kmsg_dump = (void*)kallsyms_lookup_name("kmsg_dump");
+	real_kmsg_dump = find_symbol_address("kmsg_dump");
 	if (!real_kmsg_dump) {
 		printk(KERN_ERR "Could not find kmsg_dump\n");
 		return;
@@ -31,7 +41,7 @@ void machine_shutdown(void)
 {
 	void (*real_machine_shutdown)(void);
 
-	real_machine_shutdown = (void*)kallsyms_lookup_name("machine_shutdown");
+	real_machine_shutdown = find_symbol_address("machine_shutdown");
 	if (!real_machine_shutdown) {
 		printk(KERN_ERR "Could not find machine_shutdown\n");
 		return;
@@ -49,7 +59,7 @@ void setup_mm_for_reboot(char mode)
 {
 	void (*real_setup_mm_for_reboot)(char mode);
 
-	real_setup_mm_for_reboot = (void*)kallsyms_lookup_name("setup_mm_for_reboot");
+	real_setup_mm_for_reboot = find_symbol_address("setup_mm_for_reboot");
 	if (!real_setup_mm_for_reboot) {
 		printk(KERN_ERR "Could not find setup_mm_for_reboot\n");
 		return;
@@ -62,7 +72,7 @@ void kernel_restart_prepare(char *cmd)
 {
 	void (*real_kernel_restart_prepare)(char *cmd);
 
-	real_kernel_restart_prepare = (void*)kallsyms_lookup_name("kernel_restart_prepare");
+	real_kernel_restart_prepare = find_symbol_address("kernel_restart_prepare");
 	if (!real_kernel_restart_prepare) {
 		printk(KERN_ERR "Could not find kernel_restart_prepare\n");
 		return;
@@ -105,7 +115,7 @@ static void **sys_call_table;
 
 static int setup(void)
 {
-	sys_call_table = (void**)kallsyms_lookup_name("sys_call_table");
+	sys_call_table = (void**)find_symbol_address("sys_call_table");
 	if (!sys_call_table) {
 		printk(KERN_ERR "Could not find sys_call_table\n");
 		return -1;
