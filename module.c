@@ -11,8 +11,13 @@
 #include <linux/syscalls.h>
 #include <linux/kmsg_dump.h>
 #include <linux/reboot.h>
+#include <linux/proc_fs.h>
 
 int panic_on_oops = 1;
+
+static char atags_path[PATH_MAX] = "";
+module_param_string(atags_path, atags_path, sizeof(atags_path), 0644);
+MODULE_PARM_DESC(atags_path, "The path of atags file");
 
 static void *
 find_symbol_address(const char *symbol)
@@ -111,10 +116,48 @@ _reboot(int magic1, int magic2, unsigned int cmd, void __user *arg)
 	return ret;
 }
 
+static int
+read_buffer(char* page, char** start, off_t off, int count,
+	int* eof, void* data)
+{
+	struct file *file;
+	int read_size;
+
+	file = filp_open(atags_path, O_RDONLY, 0);
+	if (IS_ERR(file))
+		return PTR_ERR(file);
+
+	read_size = kernel_read(file, file->f_pos + off, page, count);
+	filp_close(file, NULL);
+	if (read_size < 0)
+		return read_size;
+
+	if (read_size <= count)
+		*eof = 1;
+
+	return read_size;
+}
+
+static int
+create_atags_entry(void)
+{
+	struct proc_dir_entry *entry;
+	entry = create_proc_read_entry("atags", 0400,
+			NULL, read_buffer, NULL);
+
+	if (!entry)
+		return -ENOMEM;
+
+	return 0;
+}
+
 static void **sys_call_table;
 
 static int setup(void)
 {
+	if (create_atags_entry())
+		return -1;
+
 	sys_call_table = (void**)find_symbol_address("sys_call_table");
 	if (!sys_call_table) {
 		printk(KERN_ERR "Could not find sys_call_table\n");
@@ -141,6 +184,7 @@ static void __exit kexec_module_exit(void)
 	if (sys_call_table && real_reboot) {
 		sys_call_table[__NR_reboot] = real_reboot;
 	}
+	remove_proc_entry("atags", NULL);
 }
 
 module_init(kexec_module_init);
